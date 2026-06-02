@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 加藥預測動態展示儀表板</title>
+    <!-- 引入 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 引入 Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #38bdf8;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --accent-yellow: #f59e0b;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        /* 將控制面板放在左上角 */
+        .top-left-controls {
+            position: absolute;
+            top: 40px;
+            left: 50px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 100;
+        }
+        
+        .controls-instruction {
+            font-size: 0.95rem;
+            color: var(--accent-blue);
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        
+        .controls-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .top-left-controls button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        #btn-play {
+            background-color: var(--accent-blue);
+            color: #fff;
+        }
+        #btn-play:hover { background-color: #0284c7; }
+
+        .btn-stop {
+            background-color: var(--panel-bg);
+            color: var(--text-main);
+            border: 1px solid #334155 !important;
+        }
+        .btn-stop:hover { background-color: #334155; }
+
+        h1 {
+            text-align: center;
+            font-size: 2.2rem;
+            margin-bottom: 5px;
+            margin-top: 0;
+            font-weight: 700;
+            background: -webkit-linear-gradient(45deg, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            font-size: 1rem;
+        }
+        
+        #timestamp-display {
+            text-align: center;
+            color: var(--accent-green);
+            font-weight: 700;
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            background-color: rgba(34, 197, 94, 0.1);
+            display: inline-block;
+            margin-left: auto;
+            margin-right: auto;
+            padding: 8px 16px;
+            border-radius: 20px;
+        }
+
+        .header-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+            flex-grow: 1;
+        }
+
+        .panel {
+            background-color: var(--panel-bg);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--accent-blue);
+            border-bottom: 1px solid #334155;
+            padding-bottom: 10px;
+        }
+
+        /* 頂部感測器區塊: 左側卡片, 右側圖表 */
+        .sensors-section {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 20px;
+        }
+
+        .sensors-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 250px;
+        }
+
+        .sensor-card-mini {
+            background-color: #334155;
+            border-radius: 8px;
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sensor-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sensor-name-mini {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .sensor-value-mini {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .sensor-health {
+            font-size: 0.85rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .health-good { background-color: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+        .health-warn { background-color: rgba(245, 158, 11, 0.2); color: var(--accent-yellow); }
+        .health-bad { background-color: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+
+        /* 左側主圖表區塊 (包含兩個上下疊放的圖表) */
+        .main-charts {
+            grid-column: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        /* 右側加藥建議區塊 */
+        .dose-panel {
+            grid-column: 2;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: sticky;
+            top: 20px;
+            height: fit-content;
+        }
+
+        .dose-value-container {
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            background: conic-gradient(from 180deg at 50% 50%, #38bdf8 0deg, #818cf8 360deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 30px auto;
+            position: relative;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
+        }
+
+        .dose-value-inner {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background-color: var(--panel-bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dose-number {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .dose-unit {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        .dose-status {
+            margin-top: 20px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+    </style>
+</head>
+<body>
+    
+    <!-- 左上角播放控制區 -->
+    <div class="top-left-controls">
+        <div class="controls-instruction">按下播放鍵開始預測模擬</div>
+        <div class="controls-buttons">
+            <button id="btn-play" onclick="startPlay()">▶ 播放 (8小時後)</button>
+            <button id="btn-pause" class="btn-stop" onclick="pausePlay()">⏸ 暫停</button>
+            <button id="btn-reset" class="btn-stop" onclick="resetPlay()">⏹ 重置</button>
+        </div>
+    </div>
+
+    <div class="header-container">
+        <h1>AI 水質預測與智慧加藥系統</h1>
+        <div class="subtitle">即時讀取現場 SS 讀數 ➔ AI 健康度過濾 ➔ ML 模型預測最佳加藥量</div>
+        <div id="timestamp-display">系統時間: 資料載入中...</div>
+    </div>
+
+    <div class="dashboard-container">
+        
+        <!-- 頂部: 5 支 Sensor 原始讀數與 8小時折線圖 -->
+        <div class="panel sensors-section">
+            <div class="sensors-cards">
+                <div class="sensor-card-mini" style="border-left: 4px solid #3b82f6;">
+                    <div class="sensor-info">
+                        <div class="sensor-name-mini">Sensor 1</div>
+                        <div class="sensor-value-mini" id="val-ae_c4003">--</div>
+                    </div>
+                    <div class="sensor-health health-good" id="health-ae_c4003">健康度: 100</div>
+                </div>
+                <div class="sensor-card-mini" style="border-left: 4px solid #22c55e;">
+                    <div class="sensor-info">
+                        <div class="sensor-name-mini">Sensor 2</div>
+                        <div class="sensor-value-mini" id="val-ae_c4004">--</div>
+                    </div>
+                    <div class="sensor-health health-good" id="health-ae_c4004">健康度: 100</div>
+                </div>
+                <div class="sensor-card-mini" style="border-left: 4px solid #f59e0b;">
+                    <div class="sensor-info">
+                        <div class="sensor-name-mini">Sensor 3</div>
+                        <div class="sensor-value-mini" id="val-ae_c4005">--</div>
+                    </div>
+                    <div class="sensor-health health-good" id="health-ae_c4005">健康度: 100</div>
+                </div>
+                <div class="sensor-card-mini" style="border-left: 4px solid #ec4899;">
+                    <div class="sensor-info">
+                        <div class="sensor-name-mini">Sensor 4</div>
+                        <div class="sensor-value-mini" id="val-ae_c4006">--</div>
+                    </div>
+                    <div class="sensor-health health-good" id="health-ae_c4006">健康度: 100</div>
+                </div>
+                <div class="sensor-card-mini" style="border-left: 4px solid #a855f7;">
+                    <div class="sensor-info">
+                        <div class="sensor-name-mini">Sensor 5</div>
+                        <div class="sensor-value-mini" id="val-ait_c5011">--</div>
+                    </div>
+                    <div class="sensor-health health-good" id="health-ait_c5011">健康度: 100</div>
+                </div>
+            </div>
+            
+            <div style="display: flex; flex-direction: column;">
+                <div class="panel-title" style="border-bottom: none; margin-bottom: 5px;">5 支原始感測器讀數 (8 小時區間)</div>
+                <div style="flex-grow: 1; position: relative; width: 100%;">
+                    <canvas id="rawSensorsChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 左側下部: 預測 SS 趨勢圖 與 PAC 預測趨勢圖 -->
+        <div class="main-charts">
+            <div class="panel">
+                <div class="panel-title">虛擬 Sensor (預測出水 SS) - 8 小時趨勢</div>
+                <div class="chart-wrapper">
+                    <canvas id="ssChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">AI 建議加藥量 (PAC) - 8 小時趨勢</div>
+                <div class="chart-wrapper">
+                    <canvas id="pacChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右側: ML 預測加藥量 數字面板 -->
+        <div class="panel dose-panel">
+            <div class="panel-title" style="width: 100%;">即時 AI 建議加藥量</div>
+            
+            <div class="dose-value-container">
+                <div class="dose-value-inner">
+                    <div class="dose-number" id="val-pac-dose">0.0</div>
+                    <div class="dose-unit">PPM</div>
+                </div>
+            </div>
+            
+            <div class="dose-status" id="val-dose-status" style="color: var(--accent-green);">
+                ✅ 水質良好，無需加藥
+            </div>
+            <div style="font-size: 0.9rem; color: var(--text-muted);">
+                (目標控制出水 SS ≤ 20)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 8 小時 = 480 分鐘 (480 筆資料)
+        const maxDataPoints = 480; 
+        
+        // 共通的 Chart.js X軸設定
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 0 },
+            interaction: { mode: 'index', intersect: false },
+            elements: {
+                point: { radius: 0 } // 隱藏所有資料點
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#94a3b8', maxTicksLimit: 12 }
+                }
+            },
+            plugins: {
+                legend: { labels: { color: '#f8fafc', usePointStyle: true, boxWidth: 8 } }
+            }
+        };
+
+        // 1. 初始化 5 支 Raw Sensors 的圖表
+        const ctxRaw = document.getElementById('rawSensorsChart').getContext('2d');
+        const rawSensorsChart = new Chart(ctxRaw, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Sensor 1', data: [], borderColor: '#3b82f6', borderWidth: 1.5, fill: false },
+                    { label: 'Sensor 2', data: [], borderColor: '#22c55e', borderWidth: 1.5, fill: false },
+                    { label: 'Sensor 3', data: [], borderColor: '#f59e0b', borderWidth: 1.5, fill: false },
+                    { label: 'Sensor 4', data: [], borderColor: '#ec4899', borderWidth: 1.5, fill: false },
+                    { label: 'Sensor 5', data: [], borderColor: '#a855f7', borderWidth: 1.5, fill: false }
+                ]
+            },
+            options: {
+                ...commonOptions,
+                scales: {
+                    x: commonOptions.scales.x,
+                    y: { 
+                        min: 0, max: 120, // 避免極端值撐破版面
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: '#94a3b8' }
+                    }
+                }
+            }
+        });
+
+        // 2. 初始化 Predicted SS 圖表
+        const ctxSS = document.getElementById('ssChart').getContext('2d');
+        const ssChart = new Chart(ctxSS, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '虛擬 Sensor 預測值 (predicted_ss)',
+                    data: [],
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: '水質標準目標 (SS=20)',
+                    data: [],
+                    borderColor: 'rgba(34, 197, 94, 0.5)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    fill: false
+                }]
+            },
+            options: {
+                ...commonOptions,
+                scales: {
+                    x: commonOptions.scales.x,
+                    y: { 
+                        min: 0, max: 80, 
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: '#94a3b8' }
+                    }
+                }
+            }
+        });
+
+        // 3. 初始化 PAC Dose 預測圖表
+        const ctxPac = document.getElementById('pacChart').getContext('2d');
+        const pacChart = new Chart(ctxPac, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '建議 PAC 加藥量 (PPM)',
+                    data: [],
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                    borderWidth: 2,
+                    fill: true,
+                    stepped: true // 階梯狀呈現加藥量
+                }]
+            },
+            options: {
+                ...commonOptions,
+                scales: {
+                    x: commonOptions.scales.x,
+                    y: { 
+                        min: 0, max: 40,
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: '#94a3b8' }
+                    }
+                }
+            }
+        });
+
+        // 將單筆資料推入圖表與面板
+        function pushDataToDashboard(data, updateCharts = true) {
+            document.getElementById('timestamp-display').innerText = `系統時間: ${data.timestamp}`;
+            const timeLabel = data.timestamp.split(' ')[1]; // 取 HH:MM:SS
+
+            // 1. 更新 5 支 Sensor
+            const sensors = ['ae_c4003', 'ae_c4004', 'ae_c4005', 'ae_c4006', 'ait_c5011'];
+            sensors.forEach((s, idx) => {
+                const val = data.sensors[s];
+                const health = data.health[s];
+                
+                // 卡片數值
+                document.getElementById(`val-${s}`).innerText = val !== null ? val.toFixed(1) : '--';
+                
+                // 健康度燈號
+                const healthEl = document.getElementById(`health-${s}`);
+                healthEl.innerText = `健康度: ${health.toFixed(0)}`;
+                healthEl.className = 'sensor-health'; 
+                
+                if (health >= 80) healthEl.classList.add('health-good');
+                else if (health >= 50) healthEl.classList.add('health-warn');
+                else healthEl.classList.add('health-bad');
+
+                rawSensorsChart.data.datasets[idx].data.push(val);
+            });
+            rawSensorsChart.data.labels.push(timeLabel);
+
+            // 2. 更新 Predicted SS 圖表
+            ssChart.data.labels.push(timeLabel);
+            ssChart.data.datasets[0].data.push(data.predicted_ss);
+            ssChart.data.datasets[1].data.push(20);
+
+            // 3. 更新 PAC Dose 圖表與數字面板
+            const dosePPM = data.pac_dose_ppm;
+            pacChart.data.labels.push(timeLabel);
+            pacChart.data.datasets[0].data.push(dosePPM);
+
+            document.getElementById('val-pac-dose').innerText = dosePPM.toFixed(1);
+            const statusEl = document.getElementById('val-dose-status');
+            if (dosePPM === 0) {
+                statusEl.innerText = '✅ 水質達標，無需加藥';
+                statusEl.style.color = 'var(--accent-green)';
+            } else if (dosePPM > 25) {
+                statusEl.innerText = '⚠️ 水質惡化，建議大劑量加藥';
+                statusEl.style.color = 'var(--accent-red)';
+            } else {
+                statusEl.innerText = '⚙️ AI 建議適量加藥';
+                statusEl.style.color = 'var(--accent-yellow)';
+            }
+
+            // 保持資料長度不超過 8小時 (480筆)
+            if (rawSensorsChart.data.labels.length > maxDataPoints) {
+                rawSensorsChart.data.labels.shift();
+                rawSensorsChart.data.datasets.forEach(ds => ds.data.shift());
+                
+                ssChart.data.labels.shift();
+                ssChart.data.datasets.forEach(ds => ds.data.shift());
+                
+                pacChart.data.labels.shift();
+                pacChart.data.datasets.forEach(ds => ds.data.shift());
+            }
+
+            if (updateCharts) {
+                rawSensorsChart.update();
+                ssChart.update();
+                pacChart.update();
+            }
+        }
+
+        // 載入初始的 8 小時 (480筆) 資料
+        async function loadInitialData() {
+            try {
+                document.getElementById('timestamp-display').innerText = "系統時間: 載入 8 小時歷史資料中...";
+                const response = await fetch('/api/init_data');
+                const historyData = await response.json();
+                
+                // 一口氣塞入 480 筆資料，最後再一次 update() 提升效能
+                historyData.forEach(data => pushDataToDashboard(data, false));
+                
+                rawSensorsChart.update();
+                ssChart.update();
+                pacChart.update();
+                
+                document.getElementById('timestamp-display').innerText = `系統時間: ${historyData[historyData.length - 1].timestamp} (播放準備就緒)`;
+            } catch (error) {
+                console.error(error);
+                document.getElementById('timestamp-display').innerText = "系統時間: ❌ API 連線失敗";
+            }
+        }
+
+        // 輪詢下一筆
+        let playInterval = null;
+        async function fetchNextData() {
+            try {
+                const response = await fetch('/api/next_data');
+                const data = await response.json();
+                pushDataToDashboard(data, true);
+            } catch (error) {
+                console.error(error);
+                pausePlay();
+            }
+        }
+
+        function startPlay() {
+            if (!playInterval) {
+                playInterval = setInterval(fetchNextData, 1000); 
+                document.getElementById('btn-play').innerText = '▶ 播放中...';
+                document.getElementById('btn-play').style.backgroundColor = '#22c55e';
+            }
+        }
+
+        function pausePlay() {
+            if (playInterval) {
+                clearInterval(playInterval);
+                playInterval = null;
+                document.getElementById('btn-play').innerText = '▶ 播放 (8小時後)';
+                document.getElementById('btn-play').style.backgroundColor = 'var(--accent-blue)';
+            }
+        }
+
+        async function resetPlay() {
+            pausePlay();
+            try {
+                await fetch('/api/reset');
+                // 清空圖表資料
+                [rawSensorsChart, ssChart, pacChart].forEach(chart => {
+                    chart.data.labels = [];
+                    chart.data.datasets.forEach(ds => ds.data = []);
+                    chart.update();
+                });
+                
+                document.getElementById('val-pac-dose').innerText = '0.0';
+                
+                // 重新載入前 8 小時
+                loadInitialData();
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        // 網頁載入時立刻讀取前 8 小時資料
+        loadInitialData();
+    </script>
+</body>
+</html>
