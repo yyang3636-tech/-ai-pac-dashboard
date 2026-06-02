@@ -27,8 +27,8 @@ for i in range(len(df_demo)):
             "ae_c4003": row['ae_c4003_health'] if pd.notna(row['ae_c4003_health']) else 0,
             "ae_c4004": row['ae_c4004_health'] if pd.notna(row['ae_c4004_health']) else 0,
             "ae_c4005": row['ae_c4005_health'] if pd.notna(row['ae_c4005_health']) else 0,
-            "ae_c4006": row_h['ae_c4006_health'] if pd.notna(row['ae_c4006_health']) else 0,
-            "ait_c5011": row_h['ait_c5011_health'] if pd.notna(row['ait_c5011_health']) else 0,
+            "ae_c4006": row['ae_c4006_health'] if pd.notna(row['ae_c4006_health']) else 0,
+            "ait_c5011": row['ait_c5011_health'] if pd.notna(row['ait_c5011_health']) else 0,
         },
         "predicted_ss": float(row['predicted_ss']) if pd.notna(row['predicted_ss']) else 20.0
     })
